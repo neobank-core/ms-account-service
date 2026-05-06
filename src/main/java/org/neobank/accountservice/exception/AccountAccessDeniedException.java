@@ -1,7 +1,0 @@
-package org.neobank.accountservice.exception;
-
-public class AccountAccessDeniedException extends RuntimeException {
-    public AccountAccessDeniedException(String message) {
-        super(message);
-    }
-}
