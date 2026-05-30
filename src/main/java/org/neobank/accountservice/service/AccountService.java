@@ -11,6 +11,8 @@ import org.neobank.accountservice.exception.AccountNotFoundException;
 import org.neobank.accountservice.publisher.AccountEventPublisher;
 import org.neobank.accountservice.repository.AccountLimitRepository;
 import org.neobank.accountservice.repository.AccountRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class AccountService {
     private final AccountEventPublisher accountEventPublisher;
 
     @Transactional
+    @CacheEvict(value = "user-accounts", key = "#keycloakUserId")
     public void createDefaultAccount(String keycloakUserId) {
         UUID userId = UUID.fromString(keycloakUserId);
         if (accountRepository.findByUserIdAndAccountType(userId, AccountType.CHECKING).isPresent()) {
@@ -60,6 +63,7 @@ public class AccountService {
         );
     }
 
+    @Cacheable(value = "user-accounts", key = "#userId.toString()")
     public List<Account> getUserAccounts(UUID userId) {
         return accountRepository.findAllByUserId(userId);
     }
