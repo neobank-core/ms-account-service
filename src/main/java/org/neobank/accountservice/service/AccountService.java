@@ -5,9 +5,13 @@ import org.neobank.accountservice.entity.Account;
 import org.neobank.accountservice.entity.AccountLimit;
 import org.neobank.accountservice.enums.AccountStatus;
 import org.neobank.accountservice.enums.AccountType;
+import org.neobank.accountservice.dto.BalanceOperationResponse;
+import org.neobank.accountservice.event.AccountBalanceUpdatedEvent;
 import org.neobank.accountservice.event.AccountCreatedEvent;
 import org.neobank.accountservice.exception.AccountAccessDeniedException;
 import org.neobank.accountservice.exception.AccountNotFoundException;
+import org.neobank.accountservice.exception.InsufficientFundsException;
+import org.neobank.accountservice.exception.InvalidAccountStateException;
 import org.neobank.accountservice.publisher.AccountEventPublisher;
 import org.neobank.accountservice.repository.AccountLimitRepository;
 import org.neobank.accountservice.repository.AccountRepository;
@@ -91,5 +95,80 @@ public class AccountService {
         }
 
         return List.of("No transactions yet");
+    }
+
+    public Account getAccount(UUID accountId) {
+        return accountRepository.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+    }
+
+    public Account getCheckingAccountForUser(UUID userId) {
+        return accountRepository.findByUserIdAndAccountType(userId, AccountType.CHECKING)
+                .orElseThrow(() -> new AccountNotFoundException("Checking account not found for user"));
+    }
+
+    public boolean isAccountOwnedBy(UUID accountId, UUID userId) {
+        return accountRepository.findById(accountId)
+                .map(account -> account.getUserId().equals(userId))
+                .orElse(false);
+    }
+
+    @Transactional
+    @CacheEvict(value = "user-accounts", key = "#result.userId().toString()")
+    public BalanceOperationResponse debit(UUID accountId, BigDecimal amount, String currency) {
+        Account account = getActiveAccount(accountId);
+        validateCurrency(account, currency);
+        if (account.getBalance().compareTo(amount) < 0) {
+            throw new InsufficientFundsException("Insufficient funds on account " + accountId);
+        }
+        account.setBalance(account.getBalance().subtract(amount));
+        Account saved = accountRepository.save(account);
+        publishBalanceUpdated(saved);
+        return toBalanceResponse(saved);
+    }
+
+    @Transactional
+    @CacheEvict(value = "user-accounts", key = "#result.userId().toString()")
+    public BalanceOperationResponse credit(UUID accountId, BigDecimal amount, String currency) {
+        Account account = getActiveAccount(accountId);
+        validateCurrency(account, currency);
+        account.setBalance(account.getBalance().add(amount));
+        Account saved = accountRepository.save(account);
+        publishBalanceUpdated(saved);
+        return toBalanceResponse(saved);
+    }
+
+    private Account getActiveAccount(UUID accountId) {
+        Account account = accountRepository.findById(accountId)
+                .orElseThrow(() -> new AccountNotFoundException("Account not found"));
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new InvalidAccountStateException("Account is not active: " + accountId);
+        }
+        return account;
+    }
+
+    private void validateCurrency(Account account, String currency) {
+        if (!account.getCurrency().equalsIgnoreCase(currency)) {
+            throw new InvalidAccountStateException(
+                    "Currency mismatch: account=" + account.getCurrency() + ", requested=" + currency);
+        }
+    }
+
+    private void publishBalanceUpdated(Account account) {
+        accountEventPublisher.publishBalanceUpdated(new AccountBalanceUpdatedEvent(
+                account.getId(),
+                account.getUserId(),
+                account.getBalance(),
+                account.getCurrency()
+        ));
+    }
+
+    private BalanceOperationResponse toBalanceResponse(Account account) {
+        return new BalanceOperationResponse(
+                account.getId(),
+                account.getUserId(),
+                account.getBalance(),
+                account.getCurrency()
+        );
     }
 }
