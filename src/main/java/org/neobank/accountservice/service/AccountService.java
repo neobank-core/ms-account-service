@@ -12,6 +12,7 @@ import org.neobank.accountservice.publisher.AccountEventPublisher;
 import org.neobank.accountservice.repository.AccountLimitRepository;
 import org.neobank.accountservice.repository.AccountRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -25,9 +26,15 @@ public class AccountService {
     private final AccountLimitRepository accountLimitRepository;
     private final AccountEventPublisher accountEventPublisher;
 
+    @Transactional
     public void createDefaultAccount(String keycloakUserId) {
+        UUID userId = UUID.fromString(keycloakUserId);
+        if (accountRepository.findByUserIdAndAccountType(userId, AccountType.CHECKING).isPresent()) {
+            return;
+        }
+
         Account account = Account.builder()
-                .userId(UUID.fromString(keycloakUserId))
+                .userId(userId)
                 .iban(generateIban())
                 .currency("AZN")
                 .balance(BigDecimal.ZERO)
