@@ -47,9 +47,9 @@ public class AccountController {
 
     @PreAuthorize("isAuthenticated()")
     @GetMapping("/{id}/statement")
-    public ResponseEntity<List<String>> getStatement(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<List<Object>> getStatement(@PathVariable UUID id, @AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        List<String> statement = accountService.getStatement(id, userId);
+        List<Object> statement = accountService.getStatement(id, userId);
         return ResponseEntity.ok(statement);
     }
 }

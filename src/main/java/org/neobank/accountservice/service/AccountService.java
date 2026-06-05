@@ -31,6 +31,7 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final AccountLimitRepository accountLimitRepository;
     private final AccountEventPublisher accountEventPublisher;
+    private final org.neobank.accountservice.client.TransactionServiceClient transactionServiceClient;
 
     @Transactional
     @CacheEvict(value = "user-accounts", key = "#keycloakUserId")
@@ -86,7 +87,7 @@ public class AccountService {
         return account.getBalance();
     }
 
-    public List<String> getStatement(UUID id, UUID userId) {
+    public List<Object> getStatement(UUID id, UUID userId) {
         Account account = accountRepository.findById(id)
                 .orElseThrow(() -> new AccountNotFoundException("Account not found"));
 
@@ -94,7 +95,7 @@ public class AccountService {
             throw new AccountAccessDeniedException("Access denied");
         }
 
-        return List.of("No transactions yet");
+        return transactionServiceClient.getTransactionsByAccount(id);
     }
 
     public Account getAccount(UUID accountId) {
